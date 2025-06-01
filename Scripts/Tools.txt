@@ -1,0 +1,17 @@
+local v1 = {
+	["pickaxe_1"] = {
+		["name"] = "Rick The Pick",
+		["type"] = "Pickaxe",
+		["strength"] = 1
+	},
+	["dynamite"] = {
+		["name"] = "Dynamite [Destroy Ore]",
+		["type"] = "Dynamite"
+	},
+	["grabbyhand"] = {
+		["name"] = "Grabby Hand [Steals Ore]",
+		["type"] = "Steal",
+		["stackable"] = true
+	}
+}
+return v1

@@ -1,0 +1,62 @@
+local v_u_1 = game:GetService("CollectionService")
+game:GetService("ContextActionService")
+game:GetService("Debris")
+local v_u_2 = game:GetService("GuiService")
+local v3 = game:GetService("Players")
+local v4 = game:GetService("ReplicatedStorage")
+local v_u_5 = game:GetService("RunService")
+local v_u_6 = game:GetService("UserInputService")
+local v7 = require(v4.Source.Shared.PlotHandler)
+local v_u_8 = v4.Remotes
+local v_u_9 = workspace.CurrentCamera
+local v_u_10 = v7.GetPlot(game.Players.LocalPlayer)
+local _ = v3.LocalPlayer
+local v_u_11 = nil
+local v_u_12 = Instance.new("Highlight")
+v_u_12.FillColor = Color3.new(1, 0.25098, 0.25098)
+v_u_12.FillTransparency = 0.75
+v_u_12.OutlineColor = Color3.new(1, 0.25098, 0.25098)
+v_u_12.OutlineTransparency = 0
+v_u_12.DepthMode = Enum.HighlightDepthMode.Occluded
+local function v_u_18(_)
+	-- upvalues: (copy) v_u_6, (copy) v_u_2, (copy) v_u_9, (copy) v_u_1, (copy) v_u_10, (copy) v_u_12, (ref) v_u_11
+	local v13 = v_u_6:GetMouseLocation() - v_u_2:GetGuiInset()
+	local v14 = v_u_9:ScreenPointToRay(v13.X, v13.Y)
+	local v15 = RaycastParams.new()
+	v15.FilterDescendantsInstances = v_u_1:GetTagged("Destroyable")
+	v15.FilterType = Enum.RaycastFilterType.Include
+	local v16 = workspace:Raycast(v14.Origin, v14.Direction * 64, v15)
+	if v16 then
+		local v17 = v16.Instance:FindFirstAncestorWhichIsA("Model")
+		if not v_u_1:HasTag(v17, "Destroyable") then
+			return
+		end
+		if v17:IsDescendantOf(v_u_10) then
+			v_u_12.Parent = v17
+			v_u_11 = v17
+			return
+		end
+	end
+	v_u_11 = nil
+	v_u_12.Parent = script
+end
+return {
+	["type"] = "Dynamite",
+	["init"] = function(_)
+		-- upvalues: (copy) v_u_5, (copy) v_u_18
+		v_u_5:BindToRenderStep("DynamiteTracker", Enum.RenderPriority.Last.Value, v_u_18)
+	end,
+	["interact"] = function(_)
+		-- upvalues: (ref) v_u_11, (copy) v_u_8
+		if v_u_11 then
+			v_u_8.ExplodeOre:FireServer(v_u_11)
+			script.Explode:Play()
+			return true
+		end
+	end,
+	["cleanup"] = function(_)
+		-- upvalues: (copy) v_u_5, (copy) v_u_12
+		v_u_5:UnbindFromRenderStep("DynamiteTracker")
+		v_u_12.Parent = script
+	end
+}

@@ -1,0 +1,234 @@
+local Library = loadstring(Game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/wizard"))()
+local RaiseAfARM = Library:NewWindow("Raise a Farm")
+
+local MainSection = RaiseAfARM:NewSection"Main"
+
+-- [TU CÓDIGO DEL BOTÓN "1000 Spins" - LO MANTENEMOS AQUÍ]
+MainSection:CreateButton("Inf Spins", function()
+    local args = {
+        "GiveSpin",
+        999999
+    }
+    game:GetService("ReplicatedStorage"):WaitForChild("R_Server"):FireServer(unpack(args))
+    print("Solicitud de 1000 Spins enviada al servidor.")
+end)
+
+
+
+--------------------------------------------------------------------------------
+-- CÓDIGO DEL DROPDOWN Y BOTÓN DE COMPRA DE ANIMALES
+--------------------------------------------------------------------------------
+
+local selectedAnimalID = "T_Rex" -- Valor inicial por defecto (el ID que el servidor espera)
+
+-- Mapeo de nombres legibles en el Dropdown a los IDs que el servidor espera
+local animalNameToID = {
+    ["T-Rex"] = "T_Rex",         -- "T-Rex" es el texto en el dropdown, "T_Rex" es el ID para el servidor
+    ["Gnawbones"] = "Gnawbones", -- Aquí coinciden texto e ID, pero se mantiene el mapeo
+    ["Chicken"] = "Chicken",
+    ["Cow"] = "Cow",
+    ["Duck"] = "Duck",
+    ["Flamingo"] = "Flamingo",
+    ["Giraffe"] = "Giraffe",
+    ["Goat"] = "Goat",
+    ["Horse"] = "Horse",
+    ["Pig"] = "Pig",
+    ["Sheep"] = "Sheep",
+    ["Stegosaurus"] = "Stegosaurus"
+}
+
+-- Creamos la lista de opciones para el Dropdown (solo los nombres legibles)
+local animalDropdownOptions = {}
+for name, _ in pairs(animalNameToID) do
+    table.insert(animalDropdownOptions, name)
+end
+table.sort(animalDropdownOptions) -- Opcional: ordenar alfabéticamente
+
+-- Asegurarse de que el valor inicial de `selectedAnimalID` esté en `animalNameToID`
+-- para que el dropdown se inicie correctamente. Si "T_Rex" no es una clave en `animalNameToID`,
+-- la primera opción de `animalDropdownOptions` será la predeterminada.
+if animalNameToID[animalDropdownOptions[1]] then
+    selectedAnimalID = animalNameToID[animalDropdownOptions[1]]
+end
+
+
+-- Crear el Dropdown para seleccionar el animal
+-- El tercer argumento '1' indica que la primera opción de la lista será la seleccionada por defecto.
+MainSection:CreateDropdown("Select Animal", animalDropdownOptions, 1, function(textSelectedInDropdown)
+    -- Cuando el usuario selecciona una opción, obtenemos su ID correspondiente
+    if animalNameToID[textSelectedInDropdown] then
+        selectedAnimalID = animalNameToID[textSelectedInDropdown]
+        
+    else
+       
+        -- Si por alguna razón el texto no se mapea, mantenemos la selección anterior
+        -- o puedes asignar un valor seguro como el primero de la lista.
+    end
+end)
+
+
+-- Crear el botón para comprar el animal seleccionado
+MainSection:CreateButton("Get Selected Animal", function()
+    -- Solo intentar comprar si selectedAnimalID tiene un valor válido
+    if selectedAnimalID and selectedAnimalID ~= "" then
+        local args = {
+            "Spin_Give",      -- Confirmar que "Spin_Give" es el evento remoto para comprar animales
+            selectedAnimalID, -- El ID interno del animal seleccionado (ej. "T_Rex")
+            1                 -- La cantidad (asumimos 1 por compra)
+        }
+        -- La misma llamada FireServer que usaste para los spins, asumiendo que es genérica para "acciones"
+        game:GetService("ReplicatedStorage"):WaitForChild("R_Server"):FireServer(unpack(args))
+
+    else
+        
+    end
+end)
+
+local autoCollectDrops = false
+local myTycoon = nil -- Variable para almacenar una referencia a tu tycoon
+
+-- Función auxiliar para encontrar tu tycoon
+local function findMyTycoon()
+    local tycoonsFolder = game.Workspace:FindFirstChild("Tycoons")
+    local localPlayerUserId = game.Players.LocalPlayer.UserId
+
+    if not tycoonsFolder then
+        warn("FIND_MY_TYCOON: No se encontró la carpeta 'Tycoons' en el Workspace.")
+        return nil
+    end
+
+    for _, tycoon in ipairs(tycoonsFolder:GetChildren()) do
+        -- Verificamos si es un modelo y su nombre sigue el patrón Tycoon_NUMERO
+        if tycoon:IsA("Model") and tycoon.Name:match("^Tycoon_%d+$") then
+            local statsFolder = tycoon:FindFirstChild("Stats")
+            if statsFolder and statsFolder:IsA("Folder") then
+                local ownerIdValue = statsFolder:FindFirstChild("OwnerId")
+                
+                -- Basado en image_aaa181.png, OwnerId es un NumberValue.
+                if ownerIdValue and ownerIdValue:IsA("NumberValue") and ownerIdValue.Value == localPlayerUserId then
+                    print("FIND_MY_TYCOON: ¡Tu Tycoon encontrado! Nombre:", tycoon.Name, "(NumberValue)")
+                    return tycoon
+                end
+            end
+        end
+    end
+
+    warn("FIND_MY_TYCOON: No se encontró tu Tycoon con OwnerId = " .. localPlayerUserId .. " en la carpeta 'Tycoons'.")
+    return nil
+end
+
+MainSection:CreateToggle("Auto Collect Tycoon Drops", function(state)
+    autoCollectDrops = state
+    if autoCollectDrops then
+        task.spawn(function()
+            local LocalPlayer = game.Players.LocalPlayer
+            local Character = LocalPlayer.Character
+            if not Character or not Character:FindFirstChild("HumanoidRootPart") then
+                warn("AUTO_COLLECT_DROPS: No se encontró tu personaje o HumanoidRootPart.")
+                autoCollectDrops = false
+                return
+            end
+            local HumanoidRootPart = Character.HumanoidRootPart
+            
+            -- Ya no guardamos la posición original si queremos libertad de movimiento
+            -- local originalPosition = HumanoidRootPart.CFrame
+
+            -- Intentamos encontrar tu tycoon solo una vez al activar el toggle
+            if not myTycoon then
+                myTycoon = findMyTycoon()
+                if not myTycoon then
+                    autoCollectDrops = false -- Desactiva el toggle si no se encuentra el tycoon
+                    return
+                end
+            end
+
+            -- Ruta de los Drops: Directamente en el Tycoon.
+            local dropsFolder = myTycoon:FindFirstChild("Drops")
+            
+            if not dropsFolder or not dropsFolder:IsA("Folder") then
+                warn("AUTO_COLLECT_DROPS: ¡ERROR! No se encontró la carpeta 'Drops' directamente dentro de tu Tycoon o no es una carpeta válida.")
+                autoCollectDrops = false -- Desactiva el toggle
+                return
+            end
+
+            print("AUTO_COLLECT_DROPS: Iniciando recolección de drops de la carpeta:", dropsFolder:GetFullName())
+
+            while autoCollectDrops do
+                local foundPromptsThisCycle = 0
+                local totalDropsInFolder = #dropsFolder:GetChildren()
+                print("AUTO_COLLECT_DROPS: Total de elementos en la carpeta 'Drops':", totalDropsInFolder)
+
+                for _, dropInstance in ipairs(dropsFolder:GetChildren()) do
+                    print("  AUTO_COLLECT_DROPS: Inspeccionando Drop:", dropInstance.Name, " (Tipo:", dropInstance.ClassName .. ")")
+
+                    -- Acceso directo al ProximityPrompt: dropInstance.Model.Torso.Prompt_Collect
+                    local prompt = nil
+                    local modelChild = dropInstance:FindFirstChild("Model")
+                    if modelChild and modelChild:IsA("Model") then
+                        local torsoPart = modelChild:FindFirstChild("Torso")
+                        if torsoPart and torsoPart:IsA("Part") then
+                            prompt = torsoPart:FindFirstChild("Prompt_Collect")
+                            if prompt and not prompt:IsA("ProximityPrompt") then
+                                prompt = nil
+                            end
+                        end
+                    end
+                    
+                    if prompt then
+                        print("    AUTO_COLLECT_DROPS: ¡ProximityPrompt encontrado! Nombre:", prompt.Name, "Ruta:", prompt:GetFullName())
+                        print("    AUTO_COLLECT_DROPS: Prompt Enabled:", tostring(prompt.Enabled))
+                        print("    AUTO_COLLECT_DROPS: Prompt Parent:", tostring(prompt.Parent.Name))
+                        print("    AUTO_COLLECT_DROPS: Prompt Parent Transparency:", tostring(prompt.Parent.Transparency))
+
+                        -- Verificamos si el prompt es visible y puede ser activado
+                        if prompt.Enabled and prompt.Parent and prompt.Parent.Transparency ~= 1 then
+                            -- === TELEPORTACIÓN DEL PERSONAJE ANTES DE ACTIVAR ===
+                            -- NOTA: El jugador se quedará en la posición del último drop activado, permitiendo movimiento desde allí.
+                            local targetPosition = prompt.Parent.CFrame * CFrame.new(0, 0, -2) -- Teleportar 2 studs delante del prompt
+                            HumanoidRootPart.CFrame = targetPosition
+                            game:GetService("RunService").RenderStepped:Wait() -- Esperar un frame para que la posición se actualice
+
+                            local success = false
+                            local errorMessage = ""
+
+                            -- Intento 1: Función global de exploit 'fireproximityprompt' (la que funcionó)
+                            if rawget(getgenv(), "fireproximityprompt") then
+                                success, errorMessage = pcall(fireproximityprompt, prompt)
+                                if success then
+                                    print("    AUTO_COLLECT_DROPS: ¡ProximityPrompt activado exitosamente usando fireproximityprompt después de TP!")
+                                else
+                                    warn("    AUTO_COLLECT_DROPS: Falló fireproximityprompt después de TP: " .. errorMessage)
+                                end
+                            -- Si fireproximityprompt no funciona o no existe, intentar prompt:FireServer() (a veces funciona si el jugador está cerca)
+                            elseif pcall(function() prompt:FireServer() end) then
+                                success = true
+                                print("    AUTO_COLLECT_DROPS: ¡ProximityPrompt activado exitosamente usando prompt:FireServer() después de TP!")
+                            else
+                                warn("    AUTO_COLLECT_DROPS: ERROR: No se encontró un método de exploit para activar el ProximityPrompt (ni fireproximityprompt ni prompt:FireServer() funcionaron después de TP).")
+                            end
+                            
+                            if success then
+                                foundPromptsThisCycle = foundPromptsThisCycle + 1
+                            end
+
+                            -- === ELIMINADO: Ya no regresamos al jugador a la posición original ===
+                            -- HumanoidRootPart.CFrame = originalPosition
+                            -- game:GetService("RunService").RenderStepped:Wait() 
+                            -- print("    AUTO_COLLECT_DROPS: Jugador regresó a la posición original.")
+
+                        else
+                            print("    AUTO_COLLECT_DROPS: ProximityPrompt NO activado. Razón:")
+                            if not prompt.Enabled then print("      - Está deshabilitado.") end
+                            if not prompt.Parent then print("      - No tiene un Parent válido.") end
+                            if prompt.Parent and prompt.Parent.Transparency == 1 then print("      - El Parent es transparente (invisible).") end
+                        end
+                    else
+                        print("    AUTO_COLLECT_DROPS: No se encontró ProximityPrompt en la ruta esperada (Model.Torso.Prompt_Collect) para:", dropInstance.Name)
+                    end
+                end
+                print("AUTO_COLLECT_DROPS: Prompts activados en este ciclo:", foundPromptsThisCycle)
+                task.wait(0.05) -- Pequeña pausa entre "barridos" para buscar nuevos drops
+            end
+        end)
+    end
+end)

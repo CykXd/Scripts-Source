@@ -1,0 +1,359 @@
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart", 15)
+
+if not HumanoidRootPart then
+    return
+end
+
+local Workspace = game:GetService("Workspace")
+
+local WeaponsFolder
+local CurrentWeaponFolder
+local Gun
+local GunScript
+local DealDamageRemote
+
+local function loadPlayerWeapons()
+    local success = pcall(function()
+        WeaponsFolder = Character:WaitForChild("Weapons", 15)
+        if not WeaponsFolder then error("") end
+        CurrentWeaponFolder = WeaponsFolder:WaitForChild("Secondary", 15) -- Asegúrate de que esta es la carpeta correcta de tu arma
+        if not CurrentWeaponFolder then error("") end
+        Gun = CurrentWeaponFolder:WaitForChild("Gun", 15)
+        if not Gun then error("") end
+        GunScript = Gun:WaitForChild("GunScript", 15)
+        if not GunScript then error("") end
+        DealDamageRemote = GunScript:WaitForChild("DealDamage", 15)
+        if not DealDamageRemote then error("") end
+    end)
+
+    if not success then
+        warn("Failed to load weapon components. DealDamage remote may not work.")
+        DealDamageRemote = nil
+    end
+end
+
+loadPlayerWeapons()
+local isKillAllCiviliansToggled = false
+local killCiviliansThread = nil
+
+local isNoclip = false
+local noclipConnection = nil -- Para manejar la desconexión del evento ChildAdded
+
+-- Variables para el hitbox de Alexis.isback00 (modifica a otros jugadores)
+local hitboxEnabled = false
+local currentHitboxSize = 17 -- Tamaño inicial del hitbox
+local minHitboxSize = 5
+local maxHitboxSize = 60
+local originalOtherPlayerRootPartSizes = {} -- Para restaurar los tamaños originales de otros jugadores
+
+-- Colores para el Highlight (AJUSTADOS SEGÚN TU PEDIDO):
+local highlightFillColor = Color3.new(1, 0.5, 0.5) -- Rojo claro para cuando es visible (RGB de 0 a 1)
+local highlightOutlineColor = Color3.new(1, 0.9, 0.9) -- Rojo muy claro (casi blanco) para detrás de paredes
+
+-- Función para aplicar el hitbox y el highlight a un personaje específico (otro jugador)
+local function applyHitboxAndHighlightToTarget(targetCharacter, size)
+    pcall(function()
+        if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
+            local humanoidRootPart = targetCharacter.HumanoidRootPart
+            if not originalOtherPlayerRootPartSizes[humanoidRootPart] then
+                originalOtherPlayerRootPartSizes[humanoidRootPart] = humanoidRootPart.Size -- Guardar tamaño original
+            end
+            humanoidRootPart.Size = Vector3.new(size, size, size)
+            humanoidRootPart.Transparency = 0.7
+            humanoidRootPart.BrickColor = BrickColor.new("Bright red")
+            humanoidRootPart.Material = "Neon"
+            humanoidRootPart.CanCollide = false
+
+            -- Añadir o actualizar Highlight
+            local highlight = targetCharacter:FindFirstChild("HitboxHighlight")
+            if not highlight then
+                highlight = Instance.new("Highlight")
+                highlight.Name = "HitboxHighlight"
+                highlight.Parent = targetCharacter
+            end
+            highlight.Enabled = true
+            highlight.FillColor = highlightFillColor -- Rojo claro para la parte visible
+            highlight.FillTransparency = 0.2 -- Baja transparencia para un rojo más sólido a la vista
+            highlight.OutlineColor = highlightOutlineColor -- Rojo muy claro (casi blanco) para el contorno (detrás de paredes)
+            highlight.OutlineTransparency = 0.2 -- Baja transparencia para que el contorno sea visible
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- IMPORTANTE: Permite ver a través de paredes y usa Fill/Outline según visibilidad
+        end
+    end)
+end
+
+-- Función para restaurar el hitbox y eliminar el highlight de un personaje específico (otro jugador)
+local function resetHitboxAndHighlightForTarget(targetCharacter)
+    pcall(function()
+        if targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart") then
+            local humanoidRootPart = targetCharacter.HumanoidRootPart
+            if originalOtherPlayerRootPartSizes[humanoidRootPart] then
+                humanoidRootPart.Size = originalOtherPlayerRootPartSizes[humanoidRootPart]
+                humanoidRootPart.Transparency = 1 -- Hacerlo invisible de nuevo
+                humanoidRootPart.BrickColor = BrickColor.new("Really black") -- Puedes usar el color por defecto si lo conoces
+                humanoidRootPart.Material = "Plastic" -- O el material por defecto
+                humanoidRootPart.CanCollide = true -- Restaurar colisión si es necesario, aunque en el script original estaba en false
+                originalOtherPlayerRootPartSizes[humanoidRootPart] = nil -- Limpiar el registro
+            else
+                -- Si no se guardó el tamaño original, intentar restaurar a un valor predeterminado o actual del juego
+                humanoidRootPart.Transparency = 1
+                humanoidRootPart.BrickColor = BrickColor.new("Really black")
+                humanoidRootPart.Material = "Plastic"
+                humanoidRootPart.CanCollide = true
+                humanoidRootPart.Size = Vector3.new(2,2,2) -- Tamaño predeterminado para HumanoidRootPart
+            end
+
+            -- Deshabilitar o eliminar Highlight
+            local highlight = targetCharacter:FindFirstChild("HitboxHighlight")
+            if highlight then
+                highlight.Enabled = false -- Deshabilitar en lugar de destruir, por si se vuelve a activar
+                -- highlight:Destroy() -- O podrías destruirlo si prefieres no mantenerlo
+            end
+        end
+    end)
+end
+
+
+-- Función para aplicar el hitbox y el highlight a todos los demás jugadores
+local function applyHitboxAndHighlightToAllOthers(size)
+    for _, plyr in ipairs(Players:GetPlayers()) do
+        if plyr ~= LocalPlayer then
+            local char = plyr.Character
+            if char then
+                applyHitboxAndHighlightToTarget(char, size)
+            end
+        end
+    end
+end
+
+-- Función para restaurar el hitbox y el highlight de todos los demás jugadores
+local function resetHitboxAndHighlightForAllOthers()
+    for _, plyr in ipairs(Players:GetPlayers()) do
+        if plyr ~= LocalPlayer then
+            local char = plyr.Character
+            if char then
+                resetHitboxAndHighlightForTarget(char)
+            end
+        end
+    end
+    originalOtherPlayerRootPartSizes = {} -- Asegurarse de que el diccionario esté limpio
+end
+
+-- Cargar la nueva librería de UI
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/random%202"))()
+local One = library:Window("Cyk Hub - Mafia") -- Crear la ventana principal
+
+-- --- Funciones de Utilidad ---
+local function InfMoney()
+    local args = { 500000000, "Cash" }
+    game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("Player"):WaitForChild("ChangeValue"):InvokeServer(unpack(args))
+end
+
+local function RemoveWantedStatus()
+    game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("Player"):WaitForChild("RemoveWanted"):InvokeServer()
+end
+
+-- --- UI Elements ---
+
+-- Botón para Inf Money
+One:Button("Inf Money (500Mil)", function()
+    pcall(InfMoney)
+end)
+
+-- Nuevo botón para quitar el estado de "Wanted"
+One:Button("Remove Wanted", function()
+    pcall(RemoveWantedStatus)
+end)
+
+-- Toggle para matar a los civiles específicos
+One:Toggle("Kill Civilians", function(state)
+    isKillAllCiviliansToggled = state
+
+    if isKillAllCiviliansToggled then
+        killCiviliansThread = task.spawn(function()
+            while isKillAllCiviliansToggled do -- El bucle se ejecuta mientras el toggle esté activo
+                if not DealDamageRemote then
+                    warn("DealDamage RemoteFunction is nil. Stopping Kill Civilians loop.")
+                    isKillAllCiviliansToggled = false -- Detener si el RemoteFunction no se encuentra
+                    break
+                end
+
+                local map = Workspace:FindFirstChild("Map")
+                local civiliansFolder = map and map:FindFirstChild("Civilians")
+
+                if map and civiliansFolder then
+                    for _, civilianModel in ipairs(civiliansFolder:GetChildren()) do
+                        -- Verificar si el toggle se ha desactivado *durante* la iteración
+                        if not isKillAllCiviliansToggled then break end
+
+                        if civilianModel:IsA("Model") and civilianModel.Name == "Civilian" then
+                            local humanoid = civilianModel:FindFirstChild("Humanoid")
+                            if humanoid and humanoid.Health > 0 then
+                                -- Se pasa el objeto Humanoid directamente
+                                local args = { humanoid, 195 }
+                                
+                                -- Debugging: Print arguments before calling InvokeServer
+                                print("Attempting to deal damage to Civilian:", humanoid.Name, "with amount:", args[2])
+                                local success, result = pcall(function()
+                                    return DealDamageRemote:InvokeServer(unpack(args))
+                                end)
+
+                                if not success then
+                                    warn("Error invoking DealDamage for civilian:", result)
+                                end
+                            end
+                        end
+                        task.wait(0.001) -- Pequeña espera para evitar sobrecargar
+                    end
+                end
+                -- Verificar de nuevo antes de la siguiente iteración del bucle principal
+                if not isKillAllCiviliansToggled then break end
+                task.wait(0.001) -- Pequeña espera entre barridos completos
+            end
+            print("Kill Civilians loop stopped.")
+        end)
+    else
+        print("Attempting to stop Kill Civilians.")
+        -- Cuando el toggle se desactiva, cancelar el hilo
+        
+    end
+end)
+
+
+-- --- Botón para matar a todos los jugadores (ejecuta una sola vez al hacer clic) ---
+One:Button("Kill All Players", function()
+    if not DealDamageRemote then return end
+
+    local playersToKill = {}
+    for _, playerObj in ipairs(Players:GetPlayers()) do
+        if playerObj ~= LocalPlayer then -- No matarse a sí mismo
+            table.insert(playersToKill, playerObj)
+        end
+    end
+
+    if #playersToKill == 0 then
+        return
+    end
+
+    -- Iterar sobre todos los jugadores y intentar matarlos
+    for _, targetPlayer in ipairs(playersToKill) do
+        local targetCharacter = targetPlayer.Character
+        if targetCharacter then
+            local targetHumanoid = targetCharacter:FindFirstChild("Humanoid")
+            if targetHumanoid and targetHumanoid.Health > 0 then
+                -- CAMBIO AQUÍ: Pasar el objeto Humanoid directamente también para jugadores
+                local args = {
+                    targetHumanoid, -- Pasar el objeto Humanoid
+                    500
+                }
+
+                for i = 1, 4 do -- Intenta invocar varias veces para asegurar un "golpe"
+                    -- Debugging: Print arguments before calling InvokeServer
+                    print("Attempting to deal damage to Player:", targetHumanoid.Parent.Name, "with amount:", args[2])
+                    local success, result = pcall(function()
+                        if DealDamageRemote then
+                            return DealDamageRemote:InvokeServer(unpack(args))
+                        end
+                    end)
+                    if not success then
+                        warn("Error invoking DealDamage for player:", result)
+                    end
+                    task.wait(0.05) -- Pequeña espera entre golpes por jugador
+                end
+            end
+        end
+        task.wait(0.1) -- Pequeña espera entre jugadores para no sobrecargar
+    end
+end)
+
+-- <<<<<<<<< CONTROLES DE MOVIMIENTO >>>>>>>>>
+
+-- WalkSpeed (usando Box como sustituto de Slider)
+One:Box("WalkSpeed", "16", function(text)
+    local speed = tonumber(text)
+    if speed and LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+        LocalPlayer.Character.Humanoid.WalkSpeed = speed
+    end
+end)
+
+-- Noclip Toggle
+One:Toggle("Noclip", function(state)
+    isNoclip = state
+    local Character = LocalPlayer.Character
+    if not Character then return end
+
+    local function toggleCollisions(part, collideState)
+        if part and part:IsA("BasePart") then
+            part.CanCollide = collideState
+        end
+    end
+
+    if isNoclip then
+        for _, part in ipairs(Character:GetChildren()) do
+            toggleCollisions(part, false)
+        end
+        noclipConnection = Character.ChildAdded:Connect(function(part)
+            toggleCollisions(part, false)
+        end)
+    else
+        for _, part in ipairs(Character:GetChildren()) do
+            toggleCollisions(part, true)
+        end
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
+        end
+    end
+end)
+
+-- <<<<<<<<< HITBOX CONTROLS (de Alexis.isback00 con Highlight) >>>>>>>>>
+
+-- Box para ajustar el tamaño del Hitbox (este valor se usará para el tamaño del HumanoidRootPart de los enemigos)
+One:Box("Hitbox Size", tostring(currentHitboxSize), function(text)
+    local size = tonumber(text)
+    if size and size >= minHitboxSize and size <= maxHitboxSize then
+        currentHitboxSize = size
+        if hitboxEnabled then
+            applyHitboxAndHighlightToAllOthers(currentHitboxSize) -- Re-aplicar si ya está activo
+        end
+    else
+        warn("Hitbox Size: Invalid input. Please enter a number between "..minHitboxSize.." and "..maxHitboxSize..".")
+    end
+end)
+
+-- Toggle para activar/desactivar el Hitbox
+One:Toggle("Hitbox", function(state)
+    hitboxEnabled = state
+    if hitboxEnabled then
+        applyHitboxAndHighlightToAllOthers(currentHitboxSize)
+        -- Conectar a PlayerAdded para manejar nuevos jugadores y respawns de otros jugadores
+        Players.PlayerAdded:Connect(function(newPlayer)
+            if newPlayer ~= LocalPlayer then
+                newPlayer.CharacterAdded:Connect(function(newCharacter)
+                    -- Esperar un momento para que el personaje cargue completamente
+                    newCharacter:WaitForChild("HumanoidRootPart", 5)
+                    if hitboxEnabled then -- Re-verificar por si el toggle se desactivó mientras se esperaba
+                        applyHitboxAndHighlightToTarget(newCharacter, currentHitboxSize)
+                    end
+                end)
+                -- Aplicar también si el personaje ya existe cuando el jugador se une
+                if newPlayer.Character then
+                    applyHitboxAndHighlightToTarget(newPlayer.Character, currentHitboxSize)
+                end
+            end
+        end)
+        -- Aplicar también a los jugadores ya existentes en el juego
+        applyHitboxAndHighlightToAllOthers(currentHitboxSize)
+    else
+        resetHitboxAndHighlightForAllOthers()
+    end
+end)
+
+-- Asegurarse de que si el hitbox está activo al cargar el script, se aplique a los jugadores existentes
+-- Esto es útil si el script se ejecuta después de que los jugadores ya están en el juego.
+if hitboxEnabled then
+    applyHitboxAndHighlightToAllOthers(currentHitboxSize)
+end

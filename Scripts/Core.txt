@@ -1,0 +1,115 @@
+game:GetService("ContextActionService")
+local v1 = game:GetService("ReplicatedStorage")
+local v_u_2 = require(v1.Source.Shared.ItemDatabase)
+game:GetService("CollectionService")
+local v_u_3 = game:GetService("Debris")
+local v_u_4 = game:GetService("GuiService")
+local v5 = game:GetService("Players")
+local v6 = game:GetService("ReplicatedStorage")
+local v_u_7 = game:GetService("RunService")
+local v_u_8 = game:GetService("UserInputService")
+local v_u_9 = game:GetService("SoundService")
+local v_u_10 = v6.Remotes
+local v_u_11 = require(v6.Source.Shared.PlotHandler)
+local v_u_12 = require(v6.Source.Shared.Math)
+local v_u_13 = require(v6.Source.Shared.getOrCreatePitchShift)
+local v_u_14 = v_u_11.GetPlot(game.Players.LocalPlayer)
+local v_u_15 = workspace.CurrentCamera
+local v_u_16 = nil
+local v_u_17 = nil
+local v_u_18 = nil
+local v_u_19 = nil
+local _ = v5.LocalPlayer
+local function v_u_20()
+	-- upvalues: (ref) v_u_17, (copy) v_u_3
+	if v_u_17 then
+		return v_u_17
+	end
+	v_u_17 = Instance.new("Part")
+	v_u_17.Anchored = true
+	v_u_17.CanCollide = false
+	v_u_17.Transparency = 0.5
+	v_u_17.Color = Color3.new(1, 0, 0)
+	v_u_17.CastShadow = false
+	v_u_17.Shape = Enum.PartType.Cylinder
+	v_u_17.Size = Vector3.new(0.25, 3, 3)
+	v_u_17.Name = "TargetPart"
+	v_u_17.Parent = workspace
+	v_u_3:AddItem(v_u_17, 4)
+	return v_u_17
+end
+local function v_u_27(_)
+	-- upvalues: (copy) v_u_8, (copy) v_u_4, (copy) v_u_15, (ref) v_u_14, (copy) v_u_20, (ref) v_u_18, (ref) v_u_19, (ref) v_u_17
+	local v21 = v_u_8:GetMouseLocation() - v_u_4:GetGuiInset()
+	local v22 = v_u_15:ScreenPointToRay(v21.X, v21.Y)
+	local v23 = RaycastParams.new()
+	v23.FilterDescendantsInstances = { v_u_14.OreArea1.Floor }
+	v23.FilterType = Enum.RaycastFilterType.Include
+	local v24 = workspace:Raycast(v22.Origin, v22.Direction * 64, v23)
+	if v24 then
+		local v25 = v24.Instance
+		if v25:HasTag("CanPlaceOre") then
+			local v26 = v24.Position
+			local _ = v24.Normal
+			v_u_20().CFrame = CFrame.new(v26) * CFrame.Angles(0, 1.5707963267948966, 1.5707963267948966)
+			v_u_18 = v26
+			v_u_19 = v25
+			return
+		end
+	end
+	if v_u_17 then
+		v_u_17:Destroy()
+		v_u_17 = nil
+	end
+	v_u_18 = nil
+	v_u_19 = nil
+end
+v_u_10.DestroyOreCore.OnClientEvent:Connect(function(p28)
+	-- upvalues: (ref) v_u_16, (ref) v_u_17, (copy) v_u_7
+	if v_u_16 == p28 then
+		if v_u_17 then
+			v_u_17:Destroy()
+			v_u_17 = nil
+		end
+		v_u_7:UnbindFromRenderStep("PlaceUpdate")
+	end
+end)
+return {
+	["type"] = "Core",
+	["init"] = function(p29)
+		-- upvalues: (ref) v_u_14, (copy) v_u_11, (ref) v_u_16, (copy) v_u_7, (copy) v_u_27
+		v_u_14 = v_u_11.GetPlot(game.Players.LocalPlayer)
+		v_u_16 = p29
+		v_u_7:BindToRenderStep("PlaceUpdate", Enum.RenderPriority.Last.Value, v_u_27)
+	end,
+	["interact"] = function(p30)
+		-- upvalues: (copy) v_u_2, (ref) v_u_18, (ref) v_u_19, (copy) v_u_10, (copy) v_u_13, (copy) v_u_12, (copy) v_u_9, (ref) v_u_17
+		local v31 = p30:GetAttribute("id")
+		local _ = v_u_2[v31]
+		if v_u_18 ~= nil and v_u_19 ~= nil then
+			local v32 = {
+				["id"] = v31,
+				["position"] = v_u_18,
+				["floor"] = v_u_19
+			}
+			v_u_10.PlaceOreCore:FireServer(v32)
+			local v33, v34 = v_u_13(script.Place)
+			v33.Octave = v_u_12.jitter(v34)
+			v_u_9:PlayLocalSound(script.Place)
+			if v_u_17 then
+				v_u_17:Destroy()
+				v_u_17 = nil
+			end
+			return true
+		end
+	end,
+	["cleanup"] = function(_)
+		-- upvalues: (ref) v_u_16, (copy) v_u_7, (ref) v_u_17
+		v_u_16 = nil
+		v_u_7:UnbindFromRenderStep("PlaceUpdate")
+		if v_u_17 then
+			v_u_17:Destroy()
+			v_u_17 = nil
+		end
+	end
+}

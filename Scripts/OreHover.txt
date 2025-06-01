@@ -1,0 +1,53 @@
+local v_u_1 = game:GetService("CollectionService")
+local v_u_2 = game:GetService("GuiService")
+local v3 = game:GetService("Players")
+local v4 = game:GetService("ReplicatedStorage")
+local v5 = game:GetService("RunService")
+local v_u_6 = game:GetService("UserInputService")
+local v_u_7 = require(v4.Source.Shared.ItemDatabase)
+local v_u_8 = require(v4.Source.Shared.PlotHandler)
+local v_u_9 = nil
+local v_u_10 = v3.LocalPlayer
+v_u_10:WaitForChild("PlayerGui")
+local v_u_11 = v_u_10.PlayerGui:WaitForChild("ScreenGui"):FindFirstChild("HoverHolder")
+local function v17(_)
+	-- upvalues: (copy) v_u_6, (copy) v_u_2, (copy) v_u_1, (ref) v_u_9, (copy) v_u_11, (copy) v_u_7, (copy) v_u_8, (copy) v_u_10
+	local v12 = v_u_6:GetMouseLocation() - v_u_2:GetGuiInset()
+	local v13 = workspace.CurrentCamera:ScreenPointToRay(v12.X, v12.Y)
+	local v14 = RaycastParams.new()
+	v14.FilterDescendantsInstances = v_u_1:GetTagged("Hoverable")
+	v14.FilterType = Enum.RaycastFilterType.Include
+	local v15 = workspace:Raycast(v13.Origin, v13.Direction * 64, v14)
+	v_u_9 = nil
+	if v15 then
+		if v_u_1:HasTag(v15.Instance, "Mineable") then
+			v_u_9 = v15.Instance
+		else
+			local v16 = v15.Instance:FindFirstAncestorWhichIsA("Model")
+			if not v_u_1:HasTag(v16, "Hoverable") then
+				return
+			end
+			v_u_9 = v16
+		end
+	end
+	if v_u_9 == nil then
+		v_u_11.Visible = false
+	else
+		v_u_11.Visible = true
+		v_u_11.Position = UDim2.new(0, v12.X, 0, v12.Y)
+		v_u_11:FindFirstChild("Title").Text = v_u_7[v_u_9:GetAttribute("id")].name
+		if v_u_9:GetAttribute("weight") ~= nil then
+			v_u_11:FindFirstChild("Title").Text = v_u_11:FindFirstChild("Title").Text .. " [" .. string.format("%.2f", v_u_9:GetAttribute("weight")) .. "kg]"
+		end
+		v_u_11:FindFirstChild("Progress").Text = v_u_9:GetAttribute("percent") .. "% Progress"
+		if v_u_9:GetAttribute("percent") > 99 then
+			if v_u_8.GetPlotForOre(v_u_9) == v_u_10 and v_u_9:GetAttribute("type") ~= "orebase" then
+				v_u_11:FindFirstChild("Progress").Text = "<font color=\'rgb(0, 255, 0)\'>MINE!!!</font>"
+			else
+				v_u_11:FindFirstChild("Progress").Text = ""
+			end
+		end
+	end
+end
+v5:BindToRenderStep("OverlayTracker", Enum.RenderPriority.Last.Value, v17)
+return {}

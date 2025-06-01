@@ -1,0 +1,242 @@
+-- Rayfield UI Library
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/UI-Interface/CustomFIeld/main/RayField.lua'))()
+
+-- Essential Roblox Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Define Remote Events (using WaitForChild for robustness)
+-- ¡IMPORTANTE! Asegúrate de que las rutas y los nombres de estos RemoteEvents sean EXACTOS
+-- Puedes haberlos encontrado en ReplicatedStorage.Remotes.MineOre, por ejemplo.
+local MineOreEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("MineOre", 10)
+local AnswerDialogEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("AnswerDialog", 10)
+
+if not MineOreEvent then
+    warn("MineOreEvent not found in ReplicatedStorage.Remotes! Mining functionality may not work.")
+end
+if not AnswerDialogEvent then
+    warn("AnswerDialogEvent not found in ReplicatedStorage.Remotes! Dialog functionality may not work.")
+end
+
+-- Variable to store the detected player's plot name
+local PlayersOwnedPlot = nil
+local PlotStatusLabelRayfield = nil -- Referencia al elemento de texto de Rayfield para el estado del plot
+
+-- --- Script Logic (Functions for Actions) ---
+
+-- Function to find the player's owned plot
+local function findMyPlot()
+    local myPlayerName = LocalPlayer.Name
+    local plotsFolder = Workspace:WaitForChild("Plots", 10) -- Wait for Plots folder
+
+    if not plotsFolder then
+        warn("Plots folder not found in Workspace after waiting!")
+        if PlotStatusLabelRayfield then
+            PlotStatusLabelRayfield:Set("Your Plot: Not Found")
+        end
+        return nil
+    end
+
+    for i = 1, 6 do -- Iterate through plots 1 to 6
+        local plotName = "Plot" .. i
+        local currentPlot = plotsFolder:FindFirstChild(plotName)
+
+        if currentPlot then
+            local ownerValue = currentPlot:FindFirstChild("Owner")
+
+            if ownerValue then
+                -- Check for StringValue first (most common)
+                if ownerValue:IsA("StringValue") and ownerValue.Value == myPlayerName then
+                    print("Detected your plot:", plotName)
+                    return plotName
+                -- Then check for ObjectValue
+                elseif ownerValue:IsA("ObjectValue") and ownerValue.Value == LocalPlayer then
+                    print("Detected your plot:", plotName)
+                    return plotName
+                end
+            end
+        end
+    end
+    print("No plot found that belongs to you.")
+    return nil
+end
+
+-- Function to mine everything in GrowOres folder
+local function mineGrowOres()
+    if not PlayersOwnedPlot then
+        warn("Cannot mine GrowOres: Your plot has not been detected yet!")
+        if PlotStatusLabelRayfield then
+            PlotStatusLabelRayfield:Set("Error: Plot not detected!")
+        end
+        return
+    end
+
+    local OreVeinsFolder = Workspace:WaitForChild("Plots"):WaitForChild(PlayersOwnedPlot):WaitForChild("OreVeins", 10)
+
+    if not OreVeinsFolder then
+        warn("GrowOres mining: OreVeins folder not found for " .. PlayersOwnedPlot .. " after waiting.")
+        return
+    end
+
+    print("Initiating GrowOres mining on " .. PlayersOwnedPlot .. "...")
+
+    for _, oreModel in ipairs(OreVeinsFolder:GetChildren()) do
+        if oreModel:IsA("Model") and string.find(oreModel.Name, "ore{") then
+            local growOresFolder = oreModel:FindFirstChild("GrowOres")
+
+            if growOresFolder and growOresFolder:IsA("Folder") then
+                for _, itemToMine in ipairs(growOresFolder:GetChildren()) do
+                    if MineOreEvent then
+                        local success, err = pcall(function()
+                            MineOreEvent:FireServer(itemToMine)
+                        end)
+                        if not success then
+                            warn("Failed to fire MineOreEvent for", itemToMine.Name, " (GrowOres):", err)
+                        end
+                    else
+                        warn("MineOreEvent is not defined, skipping fire for:", itemToMine.Name)
+                    end
+                end
+            end
+        end
+    end
+    print("GrowOres mining completed on " .. PlayersOwnedPlot .. ".")
+end
+
+-- Function to mine entire Ore Models
+local function mineOreModels()
+    if not PlayersOwnedPlot then
+        warn("Cannot mine Ore Models: Your plot has not been detected yet!")
+        if PlotStatusLabelRayfield then
+            PlotStatusLabelRayfield:Set("Error: Plot not detected!")
+        end
+        return
+    end
+
+    local OreVeinsFolder = Workspace:WaitForChild("Plots"):WaitForChild(PlayersOwnedPlot):WaitForChild("OreVeins", 10)
+
+    if not OreVeinsFolder then
+        warn("Ore Models mining: OreVeins folder not found for " .. PlayersOwnedPlot .. " after waiting.")
+        return
+    end
+
+    print("Initiating Ore Models mining on " .. PlayersOwnedPlot .. "...")
+
+    for _, oreModel in ipairs(OreVeinsFolder:GetChildren()) do
+        if oreModel:IsA("Model") and string.find(oreModel.Name, "ore{") then
+            if MineOreEvent then
+                local success, err = pcall(function()
+                    MineOreEvent:FireServer(oreModel)
+                end)
+                if not success then
+                    warn("Failed to fire MineOreEvent for", oreModel.Name, " (Ore Models):", err)
+                end
+            else
+                warn("MineOreEvent is not defined, skipping fire for:", oreModel.Name)
+            end
+        end
+    end
+    print("Ore Models mining completed on " .. PlayersOwnedPlot .. ".")
+end
+
+-- Function to answer dialog
+local function answerDialog()
+    local args = { "butch1", 2 } -- Estos argumentos deben coincidir con lo que el RemoteEvent AnswerDialog espera
+    if AnswerDialogEvent then
+        local success, err = pcall(function()
+            AnswerDialogEvent:FireServer(unpack(args))
+        end)
+        if success then
+            print("AnswerDialog event fired.")
+        else
+            warn("Failed to fire AnswerDialog event:", err)
+        end
+    else
+        warn("AnswerDialogEvent is not defined, skipping fire.")
+    end
+end
+
+-- --- Rayfield UI Creation ---
+
+local Window = Rayfield:CreateWindow({
+    Name = "Ore Garden Hub",
+    LoadingTitle = "Ore Garden",
+    LoadingSubtitle = "Auto Farms",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "OreGardenScripts",
+        FileName = "OreGardenConfig"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "sirius", -- No necesitas esto si está deshabilitado, pero lo mantengo
+        RememberJoins = true
+    },
+    KeySystem = false,
+    KeySettings = {
+        Title = "Ore Garden Access",
+        Subtitle = "No Key Required",
+        Note = "Enjoy automating your plot!",
+        FileName = "OreGardenKey",
+        SaveKey = true,
+        GrabKeyFromSite = false,
+        Key = "FreeAccess"
+    }
+})
+
+local Tab = Window:CreateTab("Farm", 4483362458) -- Title, Image (using your existing image ID)
+
+-- Section for Plot Status
+local Section = Tab:CreateSection("Plot Status",true) -- The 2nd argument is to tell if its only a Title and doesnt contain elements
+PlotStatusLabelRayfield = Tab:CreateLabel("Your Plot: Detecting...") -- Store reference for dynamic updates
+
+-- Section for Mining Actions
+local Section = Tab:CreateSection("Mining Actions",true) -- The 2nd argument is to tell if its only a Title and doesnt contain elements
+
+Tab:CreateButton({
+    Name = "Mine GrowOres",
+    Info = "Mines all 'GrowOres' in your detected Plot.",
+    Interact = '', -- Leave empty if no specific interaction text
+    Callback = function()
+        mineGrowOres()
+    end,
+})
+
+Tab:CreateButton({
+    Name = "Mine Ore Models",
+    Info = "Mines all main 'Ore Models' in your detected Plot.",
+    Interact = '',
+    Callback = function()
+        mineOreModels()
+    end,
+})
+
+local Section = Tab:CreateSection("Sell Actions",true) -- The 2nd argument is to tell if its only a Title and doesnt contain elements
+
+Tab:CreateButton({
+    Name = "Sell All",
+    Info = "Fires the 'AnswerDialog' RemoteEvent with predefined arguments ('butch1', 2).",
+    Interact = '',
+    Callback = function()
+        answerDialog()
+    end,
+})
+
+-- --- Initial Setup ---
+-- Find the player's plot and update the Rayfield UI status label
+task.spawn(function()
+    PlayersOwnedPlot = findMyPlot()
+    if PlayersOwnedPlot then
+        if PlotStatusLabelRayfield then
+            PlotStatusLabelRayfield:Set("Your Plot: " .. PlayersOwnedPlot)
+        end
+    else
+        if PlotStatusLabelRayfield then
+            PlotStatusLabelRayfield:Set("Your Plot: Not Found")
+        end
+        -- Podrías deshabilitar botones aquí si Rayfield lo permite o manejarlo en las funciones de minería
+    end
+end)

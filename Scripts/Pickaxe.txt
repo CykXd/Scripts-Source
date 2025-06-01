@@ -1,0 +1,75 @@
+local v_u_1 = game:GetService("CollectionService")
+game:GetService("ContextActionService")
+game:GetService("Debris")
+local v_u_2 = game:GetService("GuiService")
+local v3 = game:GetService("Players")
+local v4 = game:GetService("ReplicatedStorage")
+local v_u_5 = game:GetService("RunService")
+local v_u_6 = game:GetService("UserInputService")
+local v_u_7 = game:GetService("SoundService")
+local v8 = require(v4.Source.Shared.PlotHandler)
+local v_u_9 = require(v4.Source.Shared.Math)
+local v_u_10 = require(v4.Source.Shared.getOrCreatePitchShift)
+local v_u_11 = v4.Remotes
+local v_u_12 = workspace.CurrentCamera
+local v_u_13 = v8.GetPlot(game.Players.LocalPlayer)
+local _ = v3.LocalPlayer
+local v_u_14 = nil
+local v_u_15 = Instance.new("Highlight")
+v_u_15.FillColor = Color3.new(1, 1, 1)
+v_u_15.FillTransparency = 0.75
+v_u_15.OutlineColor = Color3.new(1, 1, 1)
+v_u_15.OutlineTransparency = 0
+v_u_15.DepthMode = Enum.HighlightDepthMode.Occluded
+local function v_u_21(_)
+	-- upvalues: (copy) v_u_6, (copy) v_u_2, (copy) v_u_12, (copy) v_u_1, (copy) v_u_15, (ref) v_u_14, (copy) v_u_13
+	local v16 = v_u_6:GetMouseLocation() - v_u_2:GetGuiInset()
+	local v17 = v_u_12:ScreenPointToRay(v16.X, v16.Y)
+	local v18 = RaycastParams.new()
+	v18.FilterDescendantsInstances = v_u_1:GetTagged("Mineable")
+	v18.FilterType = Enum.RaycastFilterType.Include
+	local v19 = workspace:Raycast(v17.Origin, v17.Direction * 64, v18)
+	if v19 then
+		if v_u_1:HasTag(v19.Instance, "Mineable") then
+			v_u_15.Parent = v19.Instance
+			v_u_14 = v19.Instance
+		end
+		local v20 = v19.Instance:FindFirstAncestorWhichIsA("Model")
+		if not v_u_1:HasTag(v20, "Mineable") then
+			return
+		end
+		if v20:IsDescendantOf(v_u_13) then
+			v_u_15.Parent = v20
+			v_u_14 = v20
+			return
+		end
+	end
+	v_u_14 = nil
+	v_u_15.Parent = script
+end
+return {
+	["type"] = "Pickaxe",
+	["init"] = function(_)
+		-- upvalues: (copy) v_u_5, (copy) v_u_21
+		v_u_5:BindToRenderStep("MiningTracker", Enum.RenderPriority.Last.Value, v_u_21)
+	end,
+	["interact"] = function(_)
+		-- upvalues: (ref) v_u_14, (copy) v_u_11, (copy) v_u_10, (copy) v_u_9, (copy) v_u_7
+		if v_u_14 and v_u_14:GetAttribute("percent") >= 100 then
+			v_u_11.MineOre:FireServer(v_u_14)
+			local v22, v23 = v_u_10(script.RockHit)
+			v22.Octave = v_u_9.jitter(v23)
+			v_u_7:PlayLocalSound(script.RockHit:Clone())
+			if math.random() < 0.02 then
+				local v24 = script.VoiceLines:GetChildren()
+				v24[math.random(1, #v24)]:Play()
+			end
+			return true
+		end
+	end,
+	["cleanup"] = function(_)
+		-- upvalues: (copy) v_u_5, (copy) v_u_15
+		v_u_5:UnbindFromRenderStep("MiningTracker")
+		v_u_15.Parent = script
+	end
+}

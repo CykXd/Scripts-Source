@@ -1,0 +1,191 @@
+local library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bloodball/-back-ups-for-libs/main/random%202"))()
+local One = library:Window("Steal Character")
+
+One:Button("Remove Walls", function()
+    for _, v in ipairs(game.Workspace.Blockers:GetChildren()) do v:Destroy() end
+end)
+
+local autofarmEnabled = false
+local autofarmThread = nil
+local player = game.Players.LocalPlayer
+local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart") or player.CharacterAdded:Wait():WaitForChild("HumanoidRootPart")
+
+-- Buscar tu studio una vez
+local function findMyStudio()
+    local id = player.UserId
+    local studios = workspace:WaitForChild("Studios", 10)
+    if not studios then return end
+
+    for _, studio in ipairs(studios:GetChildren()) do
+        if studio:IsA("Model") and studio.Name == "Studio" then
+            local owner = studio:GetAttribute("Owner")
+            if (typeof(owner) == "number" and owner == id) or (typeof(owner) == "string" and tonumber(owner) == id) then
+                return studio
+            end
+        end
+    end
+end
+
+local function farmPlatforms(studio)
+    local platforms = studio:FindFirstChild("Platforms")
+    if not platforms then return end
+
+    for _, platform in ipairs(platforms:GetChildren()) do
+        local collect = platform:FindFirstChild("Collect")
+        if collect and collect:IsA("BasePart") and typeof(firetouchinterest) == "function" then
+            pcall(function()
+                firetouchinterest(collect, hrp, 0)
+                firetouchinterest(collect, hrp, 1)
+            end)
+            task.wait(0.1)
+        end
+    end
+end
+
+One:Toggle("Auto Collect", function(state)
+    autofarmEnabled = state
+
+    if state then
+        local studio = findMyStudio()
+        if not studio then warn("No studio found") return end
+
+        autofarmThread = task.spawn(function()
+            while autofarmEnabled do
+                farmPlatforms(studio)
+                task.wait(3)
+            end
+        end)
+    else
+        autofarmEnabled = false
+    end
+end)
+
+local barrierBypassActive = false
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+One:Toggle("Bypass Barriers", function(state)
+    barrierBypassActive = state
+
+    if state then
+        task.spawn(function()
+            while barrierBypassActive do
+                local studios = workspace:FindFirstChild("Studios")
+
+                if studios then
+                    for _, studio in ipairs(studios:GetChildren()) do
+                        local ownerId = studio:GetAttribute("Owner")
+                        if ownerId and ownerId ~= LocalPlayer.UserId then
+                            local barrier = studio:FindFirstChild("Barrier")
+                            if barrier then
+                                local shouldBypass = false
+
+                                for _, part in ipairs(barrier:GetDescendants()) do
+                                    if part:IsA("BasePart") and part.Name == "Line" and part.Transparency == 0 then
+                                        shouldBypass = true
+                                        break
+                                    end
+                                end
+
+                                if shouldBypass then
+                                    for _, part in ipairs(barrier:GetDescendants()) do
+                                        if part:IsA("BasePart") then
+                                            part.CanCollide = false
+                                            part.Transparency = 0.9
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+
+                task.wait(2)
+            end
+        end)
+    end
+end)
+
+One:Button("Complete Steal", function()
+    local myUserId = game.Players.LocalPlayer.UserId
+    local studios = workspace:FindFirstChild("Studios")
+
+    if studios then
+        for _, studio in ipairs(studios:GetChildren()) do
+            if studio:IsA("Model") and studio:GetAttribute("Owner") == myUserId then
+                local targetPart = studio:FindFirstChild("CompletePurchaseSign", true)
+                if targetPart and targetPart:IsA("BasePart") then
+                    game.Players.LocalPlayer.Character:PivotTo(CFrame.new(targetPart.Position + Vector3.new(0, 5, 0)))
+                    return
+                end
+            end
+        end
+    end
+end)
+
+-- Función para robar Godzilla automáticamente con botón
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local stealRemote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("ToggleStealPrompt")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
+local E_KeyCode = Enum.KeyCode.E
+
+local function findFirstGodzilla()
+    local studios = workspace:WaitForChild("Studios")
+
+    for _, studio in ipairs(studios:GetChildren()) do
+        local platforms = studio:FindFirstChild("Platforms")
+        if platforms then
+            for _, platform in ipairs(platforms:GetChildren()) do
+                if platform:IsA("Model") and platform.Name == "Platform" then
+                    local godzilla = platform:FindFirstChild("Godzilla")
+                    if godzilla and godzilla:IsA("Model") then
+                        return godzilla
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function teleportToCompleteSign()
+    local studios = workspace:WaitForChild("Studios")
+    local userId = game.Players.LocalPlayer.UserId
+
+    for _, studio in ipairs(studios:GetChildren()) do
+        if studio:IsA("Model") and studio:GetAttribute("Owner") == userId then
+            local sign = studio:FindFirstChild("CompletePurchaseSign")
+            if sign and sign:IsA("BasePart") then
+                local root = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.CFrame = sign.CFrame + Vector3.new(0, 5, 0)
+                end
+            end
+        end
+    end
+end
+
+One:Button("Steal Godzilla", function()
+    local godzillaTarget = findFirstGodzilla()
+    if godzillaTarget then
+        local root = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local godzillaHRP = godzillaTarget:FindFirstChild("HumanoidRootPart")
+        if root and godzillaHRP then
+            -- Teletransportar al jugador cerca de Godzilla
+            root.CFrame = godzillaHRP.CFrame + Vector3.new(0, 5, 0)
+            task.wait(0.3)
+
+            -- Simular la pulsación de la tecla E por 3 segundos
+            VirtualInputManager:SendKeyEvent(true, E_KeyCode, false, game.Players.LocalPlayer)
+            task.wait(0.5) -- Mantener la tecla E presionada por 3 segundos
+            VirtualInputManager:SendKeyEvent(false, E_KeyCode, false, game.Players.LocalPlayer) -- Soltar la tecla E
+            
+            -- Disparar el evento remoto de robo
+            stealRemote:FireServer(godzillaTarget)
+            task.wait(0.5)
+
+            -- Teletransportar al jugador al letrero de "Complete Purchase"
+            teleportToCompleteSign()
+        end
+    end
+end)
